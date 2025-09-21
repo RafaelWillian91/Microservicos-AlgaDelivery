@@ -9,6 +9,7 @@ import lombok.Getter;
 @AllArgsConstructor
 @Builder
 @Getter
+//Value Object Pattern - Ele não tem identidade própria (id).O foco é nos atributos
 public class ContactPoint {
 
     private String zipCode;
