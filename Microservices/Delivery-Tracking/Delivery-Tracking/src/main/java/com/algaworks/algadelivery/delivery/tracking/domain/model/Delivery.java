@@ -103,19 +103,19 @@ Isso é uma fábrica estática para garantir que o agregado comece em um estado 
 
     public void place(){
         verifyIfCanBeEdited();
-        this.setDeliveryStatus(DeliveryStatus.WAITING_FOR_COURIER);
+        this.changeStatusTo(DeliveryStatus.WAITING_FOR_COURIER);
         this.setPlacedAt(OffsetDateTime.now());
     }
 
     public void pickUp(UUID courierId){
         this.setCourierId(courierId);
-        this.setDeliveryStatus(DeliveryStatus.IN_TRANSIT);
+        this.changeStatusTo(DeliveryStatus.IN_TRANSIT);
         this.setAssignedAt(OffsetDateTime.now());
 
     }
 
     public void markAsDelivered(){
-        this.setDeliveryStatus(DeliveryStatus.DELIVERY);
+        this.changeStatusTo(DeliveryStatus.DELIVERY);
         this.setFulfilledAt(OffsetDateTime.now());
     }
 
@@ -157,6 +157,15 @@ Isso é uma fábrica estática para garantir que o agregado comece em um estado 
                    && this.getTotalCost() != null;
     }
 
+    private void changeStatusTo(DeliveryStatus newStatus){
+
+        if(newStatus != null && this.getDeliveryStatus().canChangeTo(newStatus)) {
+            throw  new DomainException("Invalid status transition from "
+            + this.getDeliveryStatus() + " to " + newStatus);
+        }
+
+        this.setDeliveryStatus(newStatus);
+    }
     @Getter
     @AllArgsConstructor
     @Builder
