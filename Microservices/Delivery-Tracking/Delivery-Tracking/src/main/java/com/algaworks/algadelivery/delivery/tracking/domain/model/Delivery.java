@@ -1,14 +1,15 @@
 package com.algaworks.algadelivery.delivery.tracking.domain.model;
 
+import com.algaworks.algadelivery.delivery.tracking.domain.exception.DomainException;
 import lombok.*;
 
 import java.math.BigDecimal;
+import java.time.Duration;
 import java.time.OffsetDateTime;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.UUID;
-import java.util.function.Predicate;
 
 @NoArgsConstructor(access = AccessLevel.PACKAGE)
 @EqualsAndHashCode(onlyExplicitlyIncluded = true)
@@ -32,7 +33,7 @@ public class Delivery {
     private BigDecimal distanceFee;
     private BigDecimal totalCost;
 
-    private BigDecimal courierCost;
+    private BigDecimal courierPayout;
     private Integer totalItems;
 
     private ContactPoint sender;
@@ -58,7 +59,7 @@ Isso é uma fábrica estática para garantir que o agregado comece em um estado 
         delivery.setTotalCost(BigDecimal.ZERO);
         delivery.setTotalItems(0);
         delivery.setDistanceFee(BigDecimal.ZERO);
-        delivery.setCourierCost(BigDecimal.ZERO);
+        delivery.setCourierPayout(BigDecimal.ZERO);
 
         return delivery;
     }
@@ -81,12 +82,41 @@ Isso é uma fábrica estática para garantir que o agregado comece em um estado 
         calculateTotalItems();
     }
 
+
     public void changeItemQuantity(UUID itemId, int quantity){
         Item item = getItems().stream().filter(i -> i.getId().equals(itemId))
                 .findFirst().orElseThrow();
 
         item.setQuantity(quantity);
         calculateTotalItems();
+    }
+
+    public void editPreparationDetails(PreparationDetails details){
+        verifyIfCanBeEdited();
+        setSender(details.getSender());
+        setRecipient(details.getRecipient());
+        setDistanceFee(details.distanceFee);
+        setCourierPayout(details.courierPayout);
+        setExpectedDeliveryAt(OffsetDateTime.now().plus(details.getExcepteDeliveryTime()));
+        setTotalCost(this.getDistanceFee().add(this.getCourierPayout()));
+    }
+
+    public void place(){
+        verifyIfCanBeEdited();
+        this.setDeliveryStatus(DeliveryStatus.WAITING_FOR_COURIER);
+        this.setPlacedAt(OffsetDateTime.now());
+    }
+
+    public void pickUp(UUID courierId){
+        this.setCourierId(courierId);
+        this.setDeliveryStatus(DeliveryStatus.IN_TRANSIT);
+        this.setAssignedAt(OffsetDateTime.now());
+
+    }
+
+    public void markAsDelivered(){
+        this.setDeliveryStatus(DeliveryStatus.DELIVERY);
+        this.setFulfilledAt(OffsetDateTime.now());
     }
 
     //Apenas o AggregateRoot pode modificar a lista de items
@@ -102,6 +132,40 @@ Isso é uma fábrica estática para garantir que o agregado comece em um estado 
     private void calculateTotalItems(){
         int totalItems = getItems().stream().mapToInt(Item::getQuantity).sum();
         setTotalItems(totalItems);
+    }
+
+    private void verifyIfCanBePlaced(){
+        if (!isFilled()){
+            throw new DomainException();
+        }
+        if(!getDeliveryStatus().equals(DeliveryStatus.DRAFT)) {
+            throw new DomainException();
+        }
+    }
+
+    private void verifyIfCanBeEdited(){
+        if (!isFilled()) {
+            throw new DomainException("Delivery precisa estar preenchido antes de ser colocado.");
+        }
+        if (!getDeliveryStatus().equals(DeliveryStatus.DRAFT)) {
+            throw new DomainException("Só é possível colocar um Delivery em estado DRAFT.");
+        }
+    }
+    private boolean isFilled(){
+        return this.getSender() != null
+                && this.getRecipient() != null
+                   && this.getTotalCost() != null;
+    }
+
+    @Getter
+    @AllArgsConstructor
+    @Builder
+    public static class  PreparationDetails{
+        private ContactPoint sender;
+        private ContactPoint recipient;
+        private BigDecimal distanceFee;
+        private BigDecimal courierPayout;
+        private Duration excepteDeliveryTime;
     }
 
 }
