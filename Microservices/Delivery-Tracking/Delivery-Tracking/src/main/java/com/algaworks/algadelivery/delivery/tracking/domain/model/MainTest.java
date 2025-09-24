@@ -7,6 +7,8 @@ public class MainTest {
 
         Delivery d = Delivery.draft();
 
+
+
         System.out.println(d);
 
     }

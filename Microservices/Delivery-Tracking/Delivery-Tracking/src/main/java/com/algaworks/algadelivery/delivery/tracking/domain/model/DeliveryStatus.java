@@ -5,13 +5,16 @@ import java.util.List;
 
 public enum DeliveryStatus {
     DRAFT,
+    //só pode mudar para WAITING_FOR_COURIER se o status atual for DRAFT
     WAITING_FOR_COURIER(DRAFT),
     IN_TRANSIT(WAITING_FOR_COURIER),
     DELIVERED(IN_TRANSIT);
 
+    //Cada enum pode ter uma lista de status anteriores válidos
     private final List<DeliveryStatus> previosStatuses;
 
     DeliveryStatus(DeliveryStatus... previosStatuses) {
+
         this.previosStatuses = Arrays.asList(previosStatuses);
     }
 
@@ -21,6 +24,6 @@ public enum DeliveryStatus {
     }
 
     public boolean canChangeTo(DeliveryStatus newStatus){
-        return !canNotChangeTo(newStatus);
+        return canNotChangeTo(newStatus);
     }
 }

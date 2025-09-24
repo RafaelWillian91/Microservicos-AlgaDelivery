@@ -31,14 +31,15 @@ public class Delivery {
     private OffsetDateTime assignedAt;
     private OffsetDateTime expectedDeliveryAt;
     private OffsetDateTime fulfilledAt;
-
-
     private BigDecimal distanceFee;
     private BigDecimal totalCost;
-
     private BigDecimal courierPayout;
     private Integer totalItems;
 
+    //O @Embedded diz ao Hibernate que os atributos do
+    // ContactPoint vão ser “espalhados” dentro da tabela da entidade Delivery
+    //Isso segue exatamente o DDD + JPA: você mantém ContactPoint como um VO reutilizável,
+    //mas garante que no banco não exista ambiguidade de colunas
     @Embedded
     @AttributeOverrides({
             @AttributeOverride(name = "zipCode", column = @Column(name = "sender_zip_code")),
@@ -51,6 +52,8 @@ public class Delivery {
     private ContactPoint sender;
 
     @Embedded
+    //Os nomes das colunas precisariam ser diferentes, senão daria conflito.
+    //É aí que entra o @AttributeOverrides: definido o nome de cada coluna gerada para cada uso do ContactPoint
     @AttributeOverrides({
             @AttributeOverride(name = "zipCode", column = @Column(name = "recipient_zip_code")),
             @AttributeOverride(name = "street", column = @Column(name = "recipient_street")),
@@ -61,19 +64,23 @@ public class Delivery {
     })
     private ContactPoint recipient;
 
-    @OneToMany(cascade = CascadeType.ALL, orphanRemoval = true, mappedBy = "delivery")//Se persistir ou remover o item os itens tambem serao removidos
+    /*
+    O Aggregate Root (Delivery) controla o ciclo de vida dos Items.
+    Está em linha com o DDD: só manipular Items através de Delivery.
+      @OneToMany -> Define o relacionamento um-para-muitos → Uma Delivery pode ter vários Item.
+      O mappedBy = "delivery" indica que o lado “dono” do relacionamento é a entidade Item (ou seja, em Item você tem um campo private Delivery delivery; mapeado com @ManyToOne).
+      cascade = CascadeType.ALL -> Exemplo: entityManager.persist(delivery) → também salva os itens dela.
+      orphanRemoval = true -> Se você remover um Item da lista items da Delivery, o Hibernate deleta esse registro do banco.
+     */
+    @OneToMany(cascade = CascadeType.ALL,
+               orphanRemoval = true,
+               mappedBy = "delivery")//Se persistir ou remover o item os itens tambem serao removidos
     private List<Item> items = new ArrayList<>();
 
     /*Cria uma entrega em estado inicial (DRAFT)
 Isso é uma fábrica estática para garantir que o agregado comece em um estado válido.
-        Cria uma entrega em estado inicial (DRAFT)
-        Define valores numéricos zerados
-        Gera um UUID automaticamente
-Isso é uma fábrica estática para garantir que o agregado comece em um estado válido.
-     */
-
-    //Garante que apenas o Aggregate Root pode modificar a lista de itens
-    //getItems() com Collections.unmodifiableList impede mutações externas.
+    Garante que apenas o Aggregate Root pode modificar a lista de itens
+    getItems() com Collections.unmodifiableList impede mutações externas. */
     public static Delivery draft() {
         Delivery delivery = new Delivery();
 
@@ -88,10 +95,13 @@ Isso é uma fábrica estática para garantir que o agregado comece em um estado 
     }
 
     //Apenas o AggregateRoot (Delivery (Aggregate Root)) controla a criação e inclusão do Item.
+    //Usa um factory method da classe Item para criar um novo objeto.
+    //Ele já recebe a referência para this (a Delivery atual), garantindo que o item “nasça” vinculado ao agregado certo.
+    //Como a relação é @OneToMany(cascade = ALL, orphanRemoval = true), o Hibernate entende que esse Item agora faz parte do ciclo de vida da Delivery.
     public UUID addItem(String name, int quantity){
         Item item = Item.brandNew(name, quantity, this);
         items.add(item);
-        calculateTotalItems();
+        calculateTotalItems();//Atualiza uma informação derivada (o total de itens), garantindo a consistência interna do agregado. Isso evita que alguém de fora precise “lembrar” de atualizar esse valor.
         return item.getId();
     }
 
@@ -167,10 +177,7 @@ Isso é uma fábrica estática para garantir que o agregado comece em um estado 
     }
 
     private void verifyIfCanBeEdited(){
-        if (!isFilled()) {
-            throw new DomainException("Delivery precisa estar preenchido antes de ser colocado.");
-        }
-        if (!getDeliveryStatus().equals(DeliveryStatus.DRAFT)) {
+            if (!getDeliveryStatus().equals(DeliveryStatus.DRAFT)) {
             throw new DomainException("Só é possível colocar um Delivery em estado DRAFT.");
         }
     }
