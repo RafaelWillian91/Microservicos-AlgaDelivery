@@ -11,6 +11,9 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+
+
+
 import java.math.BigDecimal;
 import java.time.Duration;
 import java.util.UUID;
@@ -20,6 +23,9 @@ import java.util.UUID;
 public class DeliveryPreparationService {
 
     private final DeliveryRepository deliveryRepository;
+
+    private final DeliveryTimeEstimationService deliveryTimeEstimationService;
+    private final CourierPayoutCalculationService courierPayoutCalculationService;
 
     @Transactional
     public Delivery draft(DeliveryInput input){
@@ -57,16 +63,16 @@ public class DeliveryPreparationService {
                 .street(recipientInput.getStreet())
                 .build();
 
-        Duration expectedDeliveryTime = Duration.ofHours(3);
-        BigDecimal distanceFee = new BigDecimal("10");
+        DeliveryEstimate estimate = deliveryTimeEstimationService.estimate(sender,recipient);
+        BigDecimal calculatedPayout = courierPayoutCalculationService.calculatePayout(estimate.getDistanceInKM());
 
-        BigDecimal payout = new BigDecimal("10");
+        BigDecimal distanceFee = calculateFee(estimate.getDistanceInKM());
 
         var preparationDetails = Delivery.PreparationDetails.builder()
                 .recipient(recipient)
                 .sender(sender)
-                .excepteDeliveryTime(expectedDeliveryTime)
-                .courierPayout(payout)
+                .excepteDeliveryTime(estimate.getEstimatedTime())
+                .courierPayout(calculatedPayout)
                 .distanceFee(distanceFee)
                 .build();
 
@@ -75,5 +81,11 @@ public class DeliveryPreparationService {
         for (ItemInput itemInput : input.getItems()) {
             delivery.addItem(itemInput.getName(), itemInput.getQuantity());
         }
+    }
+
+    private BigDecimal calculateFee(Double distanceInKM) {
+        return new BigDecimal("3") // taxa base
+                .multiply(BigDecimal.valueOf(distanceInKM)) // cria BigDecimal corretamente a partir de Double
+                .setScale(2, BigDecimal.ROUND_HALF_EVEN); // arredonda com segurança
     }
 }
